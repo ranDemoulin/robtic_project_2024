@@ -213,6 +213,7 @@ void process_waiting_for_a_person()
 
     // Processing of the state
     // As soon as we detect a moving person, we switch to the state "observing_the_person"
+    
     if ( new_person_position )
         current_state = observing_the_person;
 
