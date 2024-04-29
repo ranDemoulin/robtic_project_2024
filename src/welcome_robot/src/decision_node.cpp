@@ -10,6 +10,9 @@
 #include <tf/transform_datatypes.h>
 #include "std_msgs/Bool.h"
 
+#include "follow_me/include/datmo.h"
+#include "follow_me/"
+
 #define waiting_for_a_person 0
 #define observing_the_person 1
 #define rotating_to_the_person 2
@@ -224,25 +227,46 @@ void process_observing_the_person()
     // Initialization of the state
     // TO COMPLETE:
     // What should we store?
+
     if ( state_has_changed )
     {
+        // Initialisation as state has changed
         ROS_INFO("current_state: observing_the_person");
         ROS_INFO("person_position: (%f, %f)", person_position.x, person_position.y);
         ROS_INFO("press enter to continue");
         getchar();
-        frequency = 0;
+        frequency = 0;      
+        previous_position = person_position;
     }
 
+    
     // Processing of the state
     // Robair only observes and tracks the moving person
+
     if ( new_person_position )
     {
+        if (distancePoints(person_position, base_position) > max_base_distance) {
+            ROS_INFO("the person went out of the area");
+            current_state = waiting_for_a_person;
+            return;
+        }
+
         ROS_INFO("person_position: (%f, %f)", person_position.x, person_position.y);
-        // TO COMPLETE:
+        if (distancePoints(person_position, previous_position) =< 0.15) {
+            frequency++;
+        } else {
+            frequency = 0;
+            previous_position = person_position;
+        }
         // if the moving person does not move for a certain time (use frequency), we should switch to the state "rotating_to_the_person".
+        if (frequency >= frequency_expected) current_state = rotating_to_the_person;
+    } 
+    if (!person_tracked) {
+        ROS_INFO("robair loses the moving person");
+        current_state = waiting_for_a_person;
     }
 
-    // TO COMPLETE:
+    // TODO: TO COMPLETE:
     // What should robair do if it loses the moving person ? 
     // (prior to this, you should think about what happens when datmo_node loses the person,
     //  in order to determine how this node can understand that the person has been lost. 
@@ -269,13 +293,40 @@ void process_rotating_to_the_person()
         ROS_INFO("person_position: (%f, %f)", person_position.x, person_position.y);
         // TO COMPLETE:
         // Robair should rotate to face the person.
-
+        
+        if (rotation_to_person > 0)
+        {
+            pub_rotation_to_do.publish(rotation_to_person);
+            frequency = 0;
+        }
+        
         // TO COMPLETE:
         // if robair is facing the person and the ROBOT does not move during a while (use frequency and robot_moving boolean), we switch to the state "moving_to_the_person"
+        
+        
+        else 
+        {
+            if (!robot_moving)
+            {
+                frequency++;
+            }
+            
+            if (frequency >= frequency_expected)
+            {
+                current_state = moving_to_the_person;
+            }
+
+        }
+         
     }
 
     // TO COMPLETE:
     // what should robair do if it loses the moving person ?
+
+    if (!person_tracked)
+    {
+        current_state = resetting_orientation;
+    }
 
 }
 
@@ -299,17 +350,43 @@ void process_moving_to_the_person()
         //TO COMPLETE
         // Robair should move towards the person_position
 
+        if (translation_to_person > 0)
+        {
+            pub_goal_to_reach.publish(person_position);
+            frequency = 0;
+        }
+
         //TO COMPLETE
         // if robair is close to the moving person and the moving person does not move during a while (use frequency), we switch to the state "interacting_with_the_person"
+        
+        else 
+        {
+            if (!robot_moving)
+            {
+                frequency++;
+            }
+            
+            if (frequency >= frequency_expected)
+            {
+                current_state = interacting_with_the_person;
+            }
+
+        }
     }
 
     // TO COMPLETE
     // what should robair do if it loses the moving person ?
 
+    if (!person_tracked)
+    {
+        current_state = resetting_orientation;
+    }
+
 }
 
 void process_interacting_with_the_person()
 {
+    
     // Initialization of the state
     if ( state_has_changed )
     {
@@ -327,11 +404,23 @@ void process_interacting_with_the_person()
         ROS_INFO("person_position: (%f, %f)", person_position.x, person_position.y);
         // TO COMPLETE:
         // if the person goes away from robair, after a while (use frequency), we switch to the state "rotating_to_the_base"
+
+        if (translation_to_person > 0.5) {
+            frequency++;
+        } else {
+            frequency = 0;
+        }
+            
+        if (frequency >= frequency_expected) {
+            current_state = rotating_to_the_base;
+        }
     }
 
     // TO COMPLETE:
     // what should robair do if it loses the moving person ?
-
+    if (!person_tracked) {
+        current_state = rotating_to_the_base;
+    }
 }
 
 void process_rotating_to_the_base()
@@ -406,8 +495,41 @@ void process_resetting_orientation()
         //TO COMPLETE:
         // robair should rotate to face the initial orientation
 
+        //---------------------------------------------
+
+        temp = current_orientation;
+        if ( temp > M_PI )
+        {
+            ROS_WARN("rotation_done > 180 degrees: %f degrees -> %f degrees", rotation_done*180/M_PI, (rotation_done-2*M_PI)*180/M_PI);
+            temp -= 2*M_PI;
+        }
+        else{
+            if ( temp < -M_PI )
+            {
+                ROS_WARN("rotation_done < -180 degrees: %f degrees -> %f degrees", rotation_done*180/M_PI, (rotation_done+2*M_PI)*180/M_PI);
+                temp += 2*M_PI;
+            }
+        }
+        
+        geometry_msgs::Point temp_local_base; 
+        temp_local_base.x = cos(temp);
+        temp_local_base.y = sin(temp);
+
+        pub_goal_to_reach.publish(temp_local_base);
+
+        //------------------------------------------
+
         //TO COMPLETE
         // if robair is close to its initial orientation and does not move, after a while (use frequency), we switch to the state "waiting_for_a_person"
+        
+        float base_threshold = 0.05; 
+        if (distancePoints(position, init_localization) < base_threshold && !robot_moving) {
+            frequency++;
+        }
+        if (frequency >= frequency_expected) {
+            state_has_changed = true;
+            current_state = waiting_for_a_person;
+        }
     }
 
 }
