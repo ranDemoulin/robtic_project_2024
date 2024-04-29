@@ -10,8 +10,8 @@
 #include <tf/transform_datatypes.h>
 #include "std_msgs/Bool.h"
 
-#include "follow_me/include/datmo.h"
-#include "follow_me/"
+#include "datmo.h"
+
 
 #define waiting_for_a_person 0
 #define observing_the_person 1
@@ -34,7 +34,7 @@ private:
     // communication with datmo_node
     ros::Subscriber sub_person_position;
     bool new_person_position, person_tracked;
-    geometry_msgs::Point person_position;
+    geometry_msgs::Point person_position, previous_position;
 
     // communication with robot_moving_node
     ros::Subscriber sub_robot_moving;
@@ -43,6 +43,7 @@ private:
     // communication with rotation_action
     ros::Publisher pub_rotation_to_do;
     float rotation_to_person;
+
 
     // communication with action_node
     ros::Publisher pub_goal_to_reach;
@@ -65,6 +66,11 @@ private:
     geometry_msgs::Point origin_position;
     bool state_has_changed;
 
+    float base_threshold = 0.05; 
+    float translation_threshold = 0.20;
+
+
+
 public:
 
 decision_node()
@@ -74,7 +80,7 @@ decision_node()
     sub_person_position = n.subscribe("person_position", 1, &decision_node::person_positionCallback, this);
 
     // communication with rotation_node
-    pub_rotation_to_do = n.advertise<std_msgs::Float32>("rotation_to_do", 0);      // Preparing a topic to publish a rotation to perform
+    pub_rotation_to_do = n.advertise<geometry_msgs::Point>("rotation_to_do", 0);      // Preparing a topic to publish a rotation to perform
 
     // communication with action_node
     pub_goal_to_reach = n.advertise<geometry_msgs::Point>("goal_to_reach", 1);     // Preparing a topic to publish the goal to reach
@@ -93,12 +99,15 @@ decision_node()
 
     // TO COMPLETE:
     // Define base_position coordinates according to the chosen base / initial position in the map frame.
-    base_position.x = 0;
-    base_position.y = 0;
-    base_orientation = 0;
+    
+    base_position.x = current_position.x;
+    base_position.y = current_position.y;
+    base_orientation = current_orientation;
 
     origin_position.x = 0;
     origin_position.y = 0;
+
+    previous_position = origin_position;
 
     person_tracked = false;
 
@@ -211,13 +220,14 @@ void process_waiting_for_a_person()
     {
         ROS_INFO("current_state: waiting_for_a_person");
         ROS_INFO("press enter to continue");
-        getchar(); // For debugging. Uncomment when satisfied with the state machine transitions.
+        // For debugging. Uncomment when satisfied with the state machine transitions.
     }
 
     // Processing of the state
     // As soon as we detect a moving person, we switch to the state "observing_the_person"
     
     if ( new_person_position )
+        state_has_changed = true;
         current_state = observing_the_person;
 
 }
@@ -234,7 +244,6 @@ void process_observing_the_person()
         ROS_INFO("current_state: observing_the_person");
         ROS_INFO("person_position: (%f, %f)", person_position.x, person_position.y);
         ROS_INFO("press enter to continue");
-        getchar();
         frequency = 0;      
         previous_position = person_position;
     }
@@ -252,7 +261,7 @@ void process_observing_the_person()
         }
 
         ROS_INFO("person_position: (%f, %f)", person_position.x, person_position.y);
-        if (distancePoints(person_position, previous_position) =< 0.15) {
+        if (distancePoints(person_position, previous_position) <= 0.15) {
             frequency++;
         } else {
             frequency = 0;
@@ -296,7 +305,10 @@ void process_rotating_to_the_person()
         
         if (rotation_to_person > 0)
         {
-            pub_rotation_to_do.publish(rotation_to_person);
+            geometry_msgs::Point temp_rotate_person; 
+            temp_rotate_person.x = cos(rotation_to_person);
+            temp_rotate_person.y = sin(rotation_to_person);
+            pub_rotation_to_do.publish(temp_rotate_person);
             frequency = 0;
         }
         
@@ -350,10 +362,11 @@ void process_moving_to_the_person()
         //TO COMPLETE
         // Robair should move towards the person_position
 
-        if (translation_to_person > 0)
+        if (translation_to_person > translation_threshold)
         {
             pub_goal_to_reach.publish(person_position);
             frequency = 0;
+
         }
 
         //TO COMPLETE
@@ -364,6 +377,7 @@ void process_moving_to_the_person()
             if (!robot_moving)
             {
                 frequency++;
+               
             }
             
             if (frequency >= frequency_expected)
@@ -372,6 +386,9 @@ void process_moving_to_the_person()
             }
 
         }
+        
+        ROS_INFO("frequency: (%f)", frequency);
+
     }
 
     // TO COMPLETE
@@ -471,7 +488,7 @@ void process_moving_to_the_base()
         pub_goal_to_reach.publish(base_position);
         // TO COMPLETE:
         // if robair is close to its base and does not move, after a while (use frequency), we switch to the state "resetting_orientation"
-        if (distancePoints(position, init_localization) < base_threshold && !robot_moving) {
+        if (distancePoints(current_position, base_position) < base_threshold && !robot_moving) {
             frequency++;
             if (frequency >= frequency_expected) {
                 state_has_changed = true;
@@ -504,16 +521,14 @@ void process_resetting_orientation()
 
         //---------------------------------------------
 
-        temp = current_orientation;
+        float temp = current_orientation;
         if ( temp > M_PI )
         {
-            ROS_WARN("rotation_done > 180 degrees: %f degrees -> %f degrees", rotation_done*180/M_PI, (rotation_done-2*M_PI)*180/M_PI);
             temp -= 2*M_PI;
         }
         else{
             if ( temp < -M_PI )
             {
-                ROS_WARN("rotation_done < -180 degrees: %f degrees -> %f degrees", rotation_done*180/M_PI, (rotation_done+2*M_PI)*180/M_PI);
                 temp += 2*M_PI;
             }
         }
@@ -529,8 +544,7 @@ void process_resetting_orientation()
         //TO COMPLETE
         // if robair is close to its initial orientation and does not move, after a while (use frequency), we switch to the state "waiting_for_a_person"
         
-        float base_threshold = 0.05; 
-        if (distancePoints(position, init_localization) < base_threshold && !robot_moving) {
+        if (abs(current_orientation - base_orientation) < base_threshold && !robot_moving) {
             frequency++;
         }
         if (frequency >= frequency_expected) {
