@@ -237,6 +237,9 @@ void process_observing_the_person()
     if ( new_person_position )
     {
         ROS_INFO("person_position: (%f, %f)", person_position.x, person_position.y);
+
+        // testing position around same place (thresold ?) for a certain time => change state 
+
         // TO COMPLETE:
         // if the moving person does not move for a certain time (use frequency), we should switch to the state "rotating_to_the_person".
     }
@@ -378,9 +381,16 @@ void process_moving_to_the_base()
         ROS_INFO("position of robair in the map: (%f, %f, %f)", current_position.x, current_position.y, current_orientation*180/M_PI);
         //TO COMPLETE:
         // robair should move towards the base point (requires expressing base position in robair frame)
-
+        pub_goal_to_reach.publish(base_position);
         // TO COMPLETE:
         // if robair is close to its base and does not move, after a while (use frequency), we switch to the state "resetting_orientation"
+        if (distancePoints(position, init_localization) < base_threshold && !robot_moving) {
+            frequency++;
+            if (frequency >= frequency_expected) {
+                state_has_changed = true;
+                current_state = waiting_for_a_person;
+            }
+        }
     }
 
 }
@@ -405,10 +415,42 @@ void process_resetting_orientation()
         //TO COMPLETE:
         // robair should rotate to face the initial orientation
 
+        //---------------------------------------------
+
+        temp = current_orientation;
+        if ( temp > M_PI )
+        {
+            ROS_WARN("rotation_done > 180 degrees: %f degrees -> %f degrees", rotation_done*180/M_PI, (rotation_done-2*M_PI)*180/M_PI);
+            temp -= 2*M_PI;
+        }
+        else{
+            if ( temp < -M_PI )
+            {
+                ROS_WARN("rotation_done < -180 degrees: %f degrees -> %f degrees", rotation_done*180/M_PI, (rotation_done+2*M_PI)*180/M_PI);
+                temp += 2*M_PI;
+            }
+        }
+        
+        geometry_msgs::Point temp_local_base; 
+        temp_local_base.x = cos(temp);
+        temp_local_base.y = sin(temp);
+
+        pub_goal_to_reach.publish(temp_local_base);
+
+        //------------------------------------------
+
         //TO COMPLETE
         // if robair is close to its initial orientation and does not move, after a while (use frequency), we switch to the state "waiting_for_a_person"
+        
+        float base_threshold = 0.05; 
+        if (distancePoints(position, init_localization) < base_threshold && !robot_moving) {
+            frequency++;
+        }
+        if (frequency >= frequency_expected) {
+            state_has_changed = true;
+            current_state = waiting_for_a_person;
+        }
     }
-
 }
 
 //CALLBACKS
