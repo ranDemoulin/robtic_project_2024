@@ -1,0 +1,8 @@
+prefix=/home/student-4/robtic_project_2024/devel
+
+Name: welcome_robot
+Description: Description of welcome_robot
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 
