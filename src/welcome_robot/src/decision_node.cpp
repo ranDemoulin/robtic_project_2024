@@ -377,6 +377,8 @@ void process_moving_to_the_base()
     if ( new_localization )
     {
         ROS_INFO("position of robair in the map: (%f, %f, %f)", current_position.x, current_position.y, current_orientation*180/M_PI);
+
+        
         //TO COMPLETE:
         // robair should move towards the base point (requires expressing base position in robair frame)
 
