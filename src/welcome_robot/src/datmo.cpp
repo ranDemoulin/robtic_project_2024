@@ -7,7 +7,7 @@ datmo::datmo()
     sub_robot_moving = n.subscribe("robot_moving", 1, &datmo::robot_movingCallback, this);
 
     // communication with action
-    pub_datmo = n.advertise<geometry_msgs::Point>("goal_to_reach", 1); // Preparing a topic to publish the goal to reach.
+    // pub_datmo = n.advertise<geometry_msgs::Point>("goal_to_reach", 1); // Preparing a topic to publish the goal to reach.
 
     pub_datmo_marker = n.advertise<visualization_msgs::Marker>("datmo_marker", 1); // Preparing a topic to publish our results. This will be used by the visualization tool rviz
     pub_motion_marker = n.advertise<visualization_msgs::Marker>("motion_marker", 1); 
@@ -319,7 +319,7 @@ void datmo::detect_a_moving_person()
         is_person_tracked = true;
         frequency = 5;
         uncertainty = uncertainty_min;
-        pub_datmo.publish(person_tracked);
+        //pub_datmo.publish(person_tracked);
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // Publishing position when begining to track someone
         pub_tracked_person.publish(person_tracked);
@@ -365,7 +365,7 @@ void datmo::track_a_person()
         }else{
             frequency++;
         }
-        pub_datmo.publish(person_tracked);
+        //pub_datmo.publish(person_tracked);
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // Publishing position tracking someone
         pub_tracked_person.publish(person_tracked);
