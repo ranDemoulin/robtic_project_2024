@@ -22,7 +22,7 @@ private:
     ros::NodeHandle n;
 
     // communication with detection_node or datmo_node
-    ros::Subscriber sub_goal_to_reach;
+    ros::Subscriber sub_rotation_to_do;
 
     // communication with odometry
     ros::Subscriber sub_odometry;
@@ -30,8 +30,8 @@ private:
     // communication with cmd_vel to send command to the mobile robot
     ros::Publisher pub_cmd_vel;
 
-    geometry_msgs::Point goal_to_reach;
-    bool new_goal_to_reach;//to check if a new /goal_to_reach is available or not
+    geometry_msgs::Point rotation_to_do;
+    bool new_rotation_to_do;//to check if a new /rotation_to_do is available or not
 
     //pid for rotation
     float rotation_to_do, rotation_done;
@@ -58,9 +58,9 @@ rotation_node() {
     sub_odometry = n.subscribe("odom", 1, &rotation_node::odomCallback, this);
 
     // communication with datmo
-    sub_goal_to_reach = n.subscribe("goal_to_reach", 1, &rotation_node::goal_to_reachCallback, this);
+    sub_rotation_to_do = n.subscribe("rotation_to_do", 1, &rotation_node::rotation_to_doCallback, this);
 
-    new_goal_to_reach = false;
+    new_rotation_to_do = false;
     init_odom = false;   
     cond_rotation = 0;
 
@@ -83,8 +83,8 @@ void update()
     if ( init_odom )
     {
 
-        // we receive a new /goal_to_reach
-        if ( new_goal_to_reach )
+        // we receive a new /rotation_to_do
+        if ( new_rotation_to_do )
             init_rotation();
 
         //we are performing a rotation
@@ -103,19 +103,19 @@ void init_rotation()
 
     initial_orientation = current_orientation; 
 
-    new_goal_to_reach = false;
-    ROS_INFO("processing the /goal_to_reach received at (%f, %f)", goal_to_reach.x, goal_to_reach.y);   
+    new_rotation_to_do = false;
+    ROS_INFO("processing the /rotation_to_do received at (%f, %f)", rotation_to_do.x, rotation_to_do.y);   
 
     // we have a rotation and a translation to perform
     // we compute the /translation_to_do
-    translation_to_do = sqrt( ( goal_to_reach.x * goal_to_reach.x ) + ( goal_to_reach.y * goal_to_reach.y ) );
+    translation_to_do = sqrt( ( rotation_to_do.x * rotation_to_do.x ) + ( rotation_to_do.y * rotation_to_do.y ) );
 
     if ( translation_to_do )
     {
 
-        //we compute the /rotation_to_dotion_to_do = acos( goal_to_reach.x / translation_to_do );
+        //we compute the /rotation_to_dotion_to_do = acos( rotation_to_do.x / translation_to_do );
 
-        if ( goal_to_reach.y < 0 )
+        if ( rotation_to_do.y < 0 )
             rotation_to_do *=-1;
 
         //we initialize the pid for the control of rotation
@@ -228,11 +228,11 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr& o) {
 
 }
 
-void goal_to_reachCallback(const geometry_msgs::Point::ConstPtr& g) {
+void rotation_to_doCallback(const geometry_msgs::Point::ConstPtr& g) {
 // process the goal received from moving_persons detector
 
-    new_goal_to_reach = true;
-    goal_to_reach = *g;
+    new_rotation_to_do = true;
+    rotation_to_do = *g;
 
 }
 
@@ -249,7 +249,7 @@ int main(int argc, char **argv){
 
     ros::init(argc, argv, "rotation_node");
 
-    ROS_INFO("(rotation_node) waiting for a /goal_to_reach");
+    ROS_INFO("(rotation_node) waiting for a /rotation_to_do");
     rotation_node bsObject;
 
     ros::spin();

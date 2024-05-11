@@ -80,7 +80,7 @@ decision_node()
     sub_person_position = n.subscribe("person_position", 1, &decision_node::person_positionCallback, this);
 
     // communication with rotation_node
-    pub_rotation_to_do = n.advertise<geometry_msgs::Point>("rotation_to_do", 0);      // Preparing a topic to publish a rotation to perform
+    pub_rotation_to_do = n.advertise<geometry_msgs::Point>("rotation_to_do", 1);      // Preparing a topic to publish a rotation to perform
 
     // communication with action_node
     pub_goal_to_reach = n.advertise<geometry_msgs::Point>("goal_to_reach", 1);     // Preparing a topic to publish the goal to reach
@@ -99,7 +99,8 @@ decision_node()
 
     // TO COMPLETE:
     // Define base_position coordinates according to the chosen base / initial position in the map frame.
-    
+
+    while (!init_localization);  
     base_position.x = current_position.x;
     base_position.y = current_position.y;
     base_orientation = current_orientation;
@@ -206,6 +207,8 @@ void update_variables()
     {   
         // TO COMPLETE:
         // when we receive a new position(x, y, o) of robair in the map, we update:
+        local_base_position.x = (base_position.x-current_position.x);
+        local_base_position.y = (base_position.y-current_position.y);
         // translation_to_base: the translation that robair has to do to reach its base
         // rotation_to_base: the rotation that robair has to do to reach its base
         // local_base_position: the position of the base in the cartesian local frame of robot
@@ -235,9 +238,6 @@ void process_waiting_for_a_person()
 void process_observing_the_person()
 {
     // Initialization of the state
-    // TO COMPLETE:
-    // What should we store?
-
     if ( state_has_changed )
     {
         // Initialisation as state has changed
@@ -274,12 +274,6 @@ void process_observing_the_person()
         ROS_INFO("robair loses the moving person");
         current_state = waiting_for_a_person;
     }
-
-    // TODO: TO COMPLETE:
-    // What should robair do if it loses the moving person ? 
-    // (prior to this, you should think about what happens when datmo_node loses the person,
-    //  in order to determine how this node can understand that the person has been lost. 
-    //  Does it keep publishing? Does it publish a special value? Does it stop publishing?)
 
 }
 
@@ -318,13 +312,11 @@ void process_rotating_to_the_person()
         
         else 
         {
-            if (!robot_moving)
-            {
+            if (!robot_moving){
                 frequency++;
             }
             
-            if (frequency >= frequency_expected)
-            {
+            if (frequency >= frequency_expected){
                 current_state = moving_to_the_person;
             }
 
@@ -374,14 +366,11 @@ void process_moving_to_the_person()
         
         else 
         {
-            if (!robot_moving)
-            {
+            if (!robot_moving){
                 frequency++;
-               
             }
             
-            if (frequency >= frequency_expected)
-            {
+            if (frequency >= frequency_expected){
                 current_state = interacting_with_the_person;
             }
 
@@ -394,8 +383,7 @@ void process_moving_to_the_person()
     // TO COMPLETE
     // what should robair do if it loses the moving person ?
 
-    if (!person_tracked)
-    {
+    if (!person_tracked){
         current_state = resetting_orientation;
     }
 
@@ -459,9 +447,17 @@ void process_rotating_to_the_base()
         ROS_INFO("position of robair in the map: (%f, %f, %f)", current_position.x, current_position.y, current_orientation*180/M_PI);
         //TO COMPLETE
         // robair should rotate to align with the base position (requires expressing base position in the robot / laser frame)
+        pub_rotation_to_do.publish(local_base_position)
 
         //TO COMPLETE
         // if robair is face to its base and does not move, after a while (use frequency), we switch to the state "moving_to_the_base"
+        if (!robot_moving) {
+            frequency++;
+            if (frequency >= frequency_expected) {
+                state_has_changed = true;
+                current_state = moving_to_the_base;
+            }
+        }
     }
 
 }
@@ -487,14 +483,14 @@ void process_moving_to_the_base()
         
         //TO COMPLETE:
         // robair should move towards the base point (requires expressing base position in robair frame)
-        pub_goal_to_reach.publish(base_position);
+        pub_goal_to_reach.publish(local_base_position);
         // TO COMPLETE:
         // if robair is close to its base and does not move, after a while (use frequency), we switch to the state "resetting_orientation"
         if (distancePoints(current_position, base_position) < base_threshold && !robot_moving) {
             frequency++;
             if (frequency >= frequency_expected) {
                 state_has_changed = true;
-                current_state = waiting_for_a_person;
+                current_state = resetting_orientation;
             }
         }
     }
